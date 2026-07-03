@@ -16,3 +16,19 @@ class AzuraClient:
 
         response.raise_for_status()
         return response.json()
+    
+    def get_media(self, station_id):
+        response = requests.get(
+            f"{BASE_URL}/station/{station_id}/files",
+            headers=self.headers
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_playlists(self, station_id):
+        response = requests.get(
+            f"{BASE_URL}/station/{station_id}/playlists",
+            headers=self.headers
+        )
+        response.raise_for_status()
+        return response.json()
