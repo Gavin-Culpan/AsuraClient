@@ -13,10 +13,9 @@ class AzuraClient:
             f"{BASE_URL}/station/{station_id}",
             headers=self.headers
         )
-
         response.raise_for_status()
         return response.json()
-    
+
     def get_media(self, station_id):
         response = requests.get(
             f"{BASE_URL}/station/{station_id}/files",
@@ -32,3 +31,4 @@ class AzuraClient:
         )
         response.raise_for_status()
         return response.json()
+

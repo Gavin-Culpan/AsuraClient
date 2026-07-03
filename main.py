@@ -20,3 +20,15 @@ playlists = client.get_playlists(STATION_ID)
 print(f"Total playlists: {len(playlists)}")
 for pl in playlists:
     print(f"- {pl['name']} (ID: {pl['id']})")
+
+print("\n--- Monday Playlist Contents ---")
+media = client.get_media(STATION_ID)
+
+monday_items = [
+    item for item in media
+    if any(pl['id'] == 4805 for pl in item['playlists'])
+]
+
+print(f"Total items in Monday: {len(monday_items)}")
+for item in monday_items[:10]:
+    print(f"- {item['title']} by {item['artist']} ({item['length_text']})")
