@@ -1,4 +1,5 @@
 import re
+import csv
 import pdfplumber
 from thefuzz import fuzz
 from azura.client import AzuraClient
@@ -88,8 +89,9 @@ def parse_entry(content):
 def clean_title(title):
     """Strip season/episode number prefixes that often aren't in the actual media filename."""
     title = re.sub(r'^Season \d+ Episode \d+\s*', '', title)
+    title = re.sub(r'^Episode\s*-\s*\d+\s*', '', title, flags=re.IGNORECASE)
     title = re.sub(r'^EP\s*\d+:?\s*', '', title, flags=re.IGNORECASE)
-    title = re.sub(r'^\d+\s+', '', title)  # strip leading bare numbers like "29 Safety and..."
+    title = re.sub(r'^\d+\s+', '', title)
     return title.strip()
 
 
@@ -107,25 +109,82 @@ def find_best_match(episode_title, media_list, threshold=70):
     return None, best_score
 
 
+def get_top_matches(episode_title, media_list, n=3):
+    cleaned = clean_title(episode_title)
+    scored = []
+    for item in media_list:
+        score = fuzz.token_sort_ratio(cleaned, item['title'])
+        scored.append((score, item['title'], item['id']))
+    scored.sort(reverse=True)
+    return scored[:n]
+
+
+def process_all_days(days, media):
+    """Parse and match every entry across every day. Returns (all_results, unmatched)."""
+    all_results = {}
+    unmatched = []
+
+    for day_label, day_text in days.items():
+        entries = split_into_entries(day_text)
+        day_results = []
+
+        for time, content in entries:
+            parsed = parse_entry(content)
+            if not parsed["show"]:
+                continue  # skip ad-only slots with no show
+
+            match, score = find_best_match(parsed["episode_title"], media)
+            record = {
+                "time": time,
+                "show": parsed["show"],
+                "episode_title": parsed["episode_title"],
+                "matched_file_id": match["id"] if match else None,
+                "matched_title": match["title"] if match else None,
+                "score": score
+            }
+            day_results.append(record)
+
+            if not match:
+                unmatched.append({"day": day_label, **record})
+
+        all_results[day_label] = day_results
+
+    return all_results, unmatched
+
+
+def export_report(all_results, filename="schedule_report.csv"):
+    with open(filename, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Day", "Time", "Show", "Episode Title", "Status", "Matched File ID", "Match Score"])
+        for day_label, entries in all_results.items():
+            for e in entries:
+                status = "MATCHED" if e["matched_file_id"] else "NEEDS UPLOAD"
+                writer.writerow([
+                    day_label, e["time"], e["show"], e["episode_title"],
+                    status, e["matched_file_id"], e["score"]
+                ])
+    print(f"\nReport saved to {filename}")
+
+
 if __name__ == "__main__":
     text = extract_text(PDF_PATH)
     days = split_by_day(text)
     print(f"Found {len(days)} days: {list(days.keys())}")
 
-    monday_key = "Monday June 29"
-    monday_entries = split_into_entries(days[monday_key])
-    print(f"\nMonday has {len(monday_entries)} entries")
-
     client = AzuraClient()
     media = client.get_media(STATION_ID)
 
-    print("\n--- Matching Test ---")
-    for time, content in monday_entries[:5]:
-        parsed = parse_entry(content)
-        match, score = find_best_match(parsed['episode_title'], media)
-        if match:
-            print(f"\n[{time}] '{parsed['episode_title']}'")
-            print(f"  -> Matched: '{match['title']}' (score: {score}, id: {match['id']})")
-        else:
-            print(f"\n[{time}] '{parsed['episode_title']}'")
-            print(f"  -> NO MATCH (best score: {score})")
+    all_results, unmatched = process_all_days(days, media)
+
+    total_entries = sum(len(v) for v in all_results.values())
+    print(f"\nTotal episode entries across all days: {total_entries}")
+    print(f"Unmatched entries: {len(unmatched)}")
+
+    print("\n--- Unmatched Episodes (with top 3 candidates) ---")
+    for u in unmatched[:15]:
+        print(f"\n[{u['day']} {u['time']}] '{u['episode_title']}'")
+        top = get_top_matches(u['episode_title'], media)
+        for score, title, mid in top:
+            print(f"    candidate: '{title}' (score: {score}, id: {mid})")
+
+    export_report(all_results)
