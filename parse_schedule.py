@@ -119,8 +119,22 @@ def get_top_matches(episode_title, media_list, n=3):
     return scored[:n]
 
 
+def match_ads(ad_list, media_list, threshold=70):
+    """Fuzzy-match each ad name in a slot to a real AzuraCast media file."""
+    matched_ads = []
+    for ad_name in ad_list:
+        match, score = find_best_match(ad_name, media_list, threshold=threshold)
+        matched_ads.append({
+            "ad_name": ad_name,
+            "matched_file_id": match["id"] if match else None,
+            "matched_title": match["title"] if match else None,
+            "score": score
+        })
+    return matched_ads
+
+
 def process_all_days(days, media):
-    """Parse and match every entry across every day. Returns (all_results, unmatched)."""
+    """Parse and match every entry (episode + ads) across every day. Returns (all_results, unmatched)."""
     all_results = {}
     unmatched = []
 
@@ -134,13 +148,16 @@ def process_all_days(days, media):
                 continue  # skip ad-only slots with no show
 
             match, score = find_best_match(parsed["episode_title"], media)
+            matched_ads = match_ads(parsed["ads"], media)
+
             record = {
                 "time": time,
                 "show": parsed["show"],
                 "episode_title": parsed["episode_title"],
                 "matched_file_id": match["id"] if match else None,
                 "matched_title": match["title"] if match else None,
-                "score": score
+                "score": score,
+                "ads": matched_ads
             }
             day_results.append(record)
 
@@ -155,13 +172,28 @@ def process_all_days(days, media):
 def export_report(all_results, filename="schedule_report.csv"):
     with open(filename, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["Day", "Time", "Show", "Episode Title", "Status", "Matched File ID", "Match Score"])
+        writer.writerow([
+            "Day", "Time", "Show", "Episode Title", "Status",
+            "Matched File ID", "Match Score",
+            "Ad 1", "Ad 1 Status", "Ad 2", "Ad 2 Status", "Ad 3", "Ad 3 Status"
+        ])
         for day_label, entries in all_results.items():
             for e in entries:
                 status = "MATCHED" if e["matched_file_id"] else "NEEDS UPLOAD"
+
+                ad_cells = []
+                for i in range(3):
+                    if i < len(e["ads"]):
+                        ad = e["ads"][i]
+                        ad_status = "MATCHED" if ad["matched_file_id"] else "NEEDS UPLOAD"
+                        ad_cells.extend([ad["ad_name"], ad_status])
+                    else:
+                        ad_cells.extend(["", ""])
+
                 writer.writerow([
                     day_label, e["time"], e["show"], e["episode_title"],
-                    status, e["matched_file_id"], e["score"]
+                    status, e["matched_file_id"], e["score"],
+                    *ad_cells
                 ])
     print(f"\nReport saved to {filename}")
 
@@ -178,13 +210,6 @@ if __name__ == "__main__":
 
     total_entries = sum(len(v) for v in all_results.values())
     print(f"\nTotal episode entries across all days: {total_entries}")
-    print(f"Unmatched entries: {len(unmatched)}")
-
-    print("\n--- Unmatched Episodes (with top 3 candidates) ---")
-    for u in unmatched[:15]:
-        print(f"\n[{u['day']} {u['time']}] '{u['episode_title']}'")
-        top = get_top_matches(u['episode_title'], media)
-        for score, title, mid in top:
-            print(f"    candidate: '{title}' (score: {score}, id: {mid})")
+    print(f"Unmatched episode entries: {len(unmatched)}")
 
     export_report(all_results)
