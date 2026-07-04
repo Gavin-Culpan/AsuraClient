@@ -120,6 +120,14 @@ class AzuraClient:
         response.raise_for_status()
         return response.json()
     
+    def delete_playlist(self, station_id, playlist_id):
+        response = requests.delete(
+            f"{BASE_URL}/station/{station_id}/playlist/{playlist_id}",
+            headers=self.headers
+        )
+        response.raise_for_status()
+        return response.json()
+    
     def create_timeslot_playlist(self, station_id, name, weekday_number, start_hhmm, end_hhmm, file_ids):
         """
         Create a narrow-window playlist that interrupts to play specific files
