@@ -25,3 +25,6 @@ print(text[idx:idx+2500])
 
 idx = text.find("StationPlaylist:")
 print(text[idx:idx+2500])
+
+idx = text.find("/station/{station_id}/playlist/{id}/queue")
+print(text[idx:idx+2000])

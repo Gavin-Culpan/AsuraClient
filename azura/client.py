@@ -119,3 +119,37 @@ class AzuraClient:
         )
         response.raise_for_status()
         return response.json()
+    
+    def create_timeslot_playlist(self, station_id, name, weekday_number, start_hhmm, end_hhmm, file_ids):
+        """
+        Create a narrow-window playlist that interrupts to play specific files
+        at an exact time. start_hhmm/end_hhmm are ints like 900 for 9:00, 2359 for 23:59.
+        """
+        payload = {
+            "name": name,
+            "type": "default",
+            "source": "songs",
+            "order": "sequential",
+            "is_enabled": True,
+            "weight": 10,
+            "backend_options": ["interrupt"],
+            "schedule_items": [
+                {
+                    "start_time": start_hhmm,
+                    "end_time": end_hhmm,
+                    "days": [weekday_number]
+                }
+            ]
+        }
+        response = requests.post(
+            f"{BASE_URL}/station/{station_id}/playlists",
+            headers=self.headers,
+            json=payload
+        )
+        response.raise_for_status()
+        playlist = response.json()
+
+        for file_id in file_ids:
+            self.assign_file_to_playlist(station_id, file_id, playlist["id"])
+
+        return playlist
