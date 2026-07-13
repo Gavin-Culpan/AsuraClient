@@ -20,6 +20,7 @@ KNOWN_SHOWS = [
     "ChangeMakers with Katie Goar",
     "Multifamily - From The Ground Up",
     "Filed & Deranged: Property Management's Classified Circus!",
+    "Behind The Portfolio",
 ]
 
 
